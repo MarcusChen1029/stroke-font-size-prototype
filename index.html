@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>筆畫字級閱讀原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: control panel on the left, live preview on the right; side-by-side comparison of uniform vs. three-level sizing. */
+:root {
+  --bg: #EDF0F3;
+  --surface: #FFFFFF;
+  --ink: #1B2430;
+  --muted: #5E6878;
+  --line: #D3D9E1;
+  --accent: #2B5C8F;
+  --lv-s: #23708C;
+  --lv-s-bg: #DCEEF4;
+  --lv-m: #8A94A3;
+  --lv-l: #A9551F;
+  --lv-l-bg: #F7E4D5;
+  --font-ui: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-serif: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161C; --surface: #1A2029; --ink: #E5E9EF; --muted: #9BA5B3; --line: #2D3542;
+    --accent: #86AEDB; --lv-s: #82C6DD; --lv-s-bg: rgba(70,150,180,.22); --lv-m: #6E7887;
+    --lv-l: #EBA676; --lv-l-bg: rgba(205,115,55,.22); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161C; --surface: #1A2029; --ink: #E5E9EF; --muted: #9BA5B3; --line: #2D3542;
+  --accent: #86AEDB; --lv-s: #82C6DD; --lv-s-bg: rgba(70,150,180,.22); --lv-m: #6E7887;
+  --lv-l: #EBA676; --lv-l-bg: rgba(205,115,55,.22); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.6; }
+
+header { padding: 28px 24px 18px; max-width: 1320px; margin: 0 auto; display: grid; gap: 6px; }
+header h1 { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin: 0; text-wrap: balance; letter-spacing: .02em; }
+header p { margin: 0; color: var(--muted); max-width: 62ch; }
+
+.app { max-width: 1320px; margin: 0 auto; padding: 0 24px 40px; display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 18px; position: sticky; top: 16px; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
+legend { font-weight: 700; font-size: 13px; color: var(--muted); letter-spacing: .08em; padding: 0; margin-bottom: 8px; }
+.panel fieldset + fieldset { border-top: 1px solid var(--line); padding-top: 16px; }
+
+textarea { width: 100%; min-height: 150px; resize: vertical; font: inherit; font-size: 14px; line-height: 1.7; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+
+.ctl { display: grid; gap: 4px; }
+.ctl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ctl-head label { font-weight: 500; }
+.ctl-head output { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+.seg { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 8px; }
+.seg-label { font-weight: 500; }
+.seg-opts { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg-opts input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-opts label { flex: 1; text-align: center; padding: 4px 6px; cursor: pointer; font-size: 13.5px; color: var(--muted); }
+.seg-opts label + input + label, .seg-opts input + label ~ label { border-left: 1px solid var(--line); }
+.seg-opts input:checked + label { background: var(--accent); color: var(--surface); font-weight: 500; }
+.seg-opts input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.preview { display: grid; gap: 14px; min-width: 0; }
+
+.stats { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; display: grid; gap: 10px; }
+.stats-top { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: baseline; font-variant-numeric: tabular-nums; }
+.stat { display: flex; align-items: baseline; gap: 6px; }
+.chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.chip.s { background: var(--lv-s-bg); color: var(--lv-s); }
+.chip.m { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.chip.l { background: var(--lv-l-bg); color: var(--lv-l); }
+.stat b { font-size: 17px; }
+.stat small { color: var(--muted); }
+.total { color: var(--muted); margin-left: auto; }
+.bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--bg); }
+.bar span { display: block; height: 100%; }
+.bar .s { background: var(--lv-s); }
+.bar .m { background: var(--lv-m); opacity: .45; }
+.bar .l { background: var(--lv-l); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend em { font-style: normal; color: var(--ink); font-family: var(--font-serif); }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.compare.single { grid-template-columns: 1fr; }
+.compare.single .pane.uniform { display: none; }
+.compare.stack { grid-template-columns: 1fr; }
+
+.pane { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.pane-head { padding: 10px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.pane-head strong { font-weight: 700; }
+.pane-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.pane.graded .pane-head { box-shadow: inset 3px 0 0 var(--accent); }
+
+.text { padding: 22px 26px 26px; text-align: justify; overflow-wrap: anywhere; font-size: var(--fs-m); line-height: var(--lh-px); color: var(--ink); }
+.text.serif { font-family: var(--font-serif); }
+.text p { margin: 0 0 0.9em; text-indent: 2em; }
+.text p:last-child { margin-bottom: 0; }
+.text.vertical { writing-mode: vertical-rl; height: 30rem; overflow-x: auto; overflow-y: hidden; }
+.text.vertical p { margin: 0 0 0 0.9em; }
+
+.graded .s { font-size: var(--fs-s); }
+.graded .l { font-size: var(--fs-l); }
+.graded.mid span { vertical-align: middle; }
+.graded.hl .s { background: var(--lv-s-bg); color: var(--lv-s); border-radius: 2px; }
+.graded.hl .l { background: var(--lv-l-bg); color: var(--lv-l); border-radius: 2px; }
+
+footer { max-width: 1320px; margin: 0 auto; padding: 0 24px 32px; color: var(--muted); font-size: 12.5px; }
+footer p { margin: 0 0 4px; max-width: 90ch; }
+
+@media (max-width: 1000px) {
+  .compare { grid-template-columns: 1fr; }
+}
+@media (max-width: 820px) {
+  .app { grid-template-columns: 1fr; padding: 0 16px 32px; }
+  header { padding: 22px 16px 14px; }
+  footer { padding: 0 16px 28px; }
+  .panel { position: static; }
+  .text { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>筆畫字級閱讀原型</h1>
+  <p>依每個中文字的筆畫數自動分級：筆畫少的字小一級、筆畫多的字大一級、其餘用標準字級。在左側調整規則，右側即時預覽，並與統一字級的原文對照。</p>
+</header>
+
+<main class="app">
+  <aside class="panel" aria-label="設定">
+    <fieldset>
+      <legend>文章</legend>
+      <textarea id="src" aria-label="要轉換的文章"></textarea>
+      <div class="row-btns">
+        <button type="button" id="btn-sample">還原範例文章</button>
+        <button type="button" id="btn-clear">清空</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>分級規則</legend>
+      <div class="ctl">
+        <div class="ctl-head"><label for="small-max">小字：筆畫 ≤</label><output id="small-max-out" for="small-max">6 畫</output></div>
+        <input type="range" id="small-max" min="1" max="20" value="6">
+      </div>
+      <div class="ctl">
+        <div class="ctl-head"><label for="large-min">大字：筆畫 ≥</label><output id="large-min-out" for="large-min">15 畫</output></div>
+        <input type="range" id="large-min" min="2" max="30" value="15">
+      </div>
+      <p class="hint" id="rule-hint">7–14 畫的字使用標準字級。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>字級</legend>
+      <div class="ctl">
+        <div class="ctl-head"><label for="base">標準字級</label><output id="base-out" for="base">20 px</output></div>
+        <input type="range" id="base" min="12" max="36" value="20">
+      </div>
+      <div class="ctl">
+        <div class="ctl-head"><label for="step">一個字級的差距</label><output id="step-out" for="step">2 px</output></div>
+        <input type="range" id="step" min="1" max="8" value="2">
+      </div>
+      <div class="ctl">
+        <div class="ctl-head"><label for="lh">行高</label><output id="lh-out" for="lh">1.9 倍</output></div>
+        <input type="range" id="lh" min="1.3" max="2.6" step="0.1" value="1.9">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>版面</legend>
+      <div class="seg" role="radiogroup" aria-label="字體">
+        <span class="seg-label">字體</span>
+        <div class="seg-opts">
+          <input type="radio" name="font" id="font-serif" value="serif" checked><label for="font-serif">明體</label>
+          <input type="radio" name="font" id="font-sans" value="sans"><label for="font-sans">黑體</label>
+        </div>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="排列方向">
+        <span class="seg-label">排列</span>
+        <div class="seg-opts">
+          <input type="radio" name="dir" id="dir-h" value="h" checked><label for="dir-h">橫排</label>
+          <input type="radio" name="dir" id="dir-v" value="v"><label for="dir-v">直排</label>
+        </div>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="字的對齊方式">
+        <span class="seg-label">對齊</span>
+        <div class="seg-opts">
+          <input type="radio" name="align" id="align-base" value="base" checked><label for="align-base">基線</label>
+          <input type="radio" name="align" id="align-mid" value="mid"><label for="align-mid">置中</label>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>顯示</legend>
+      <label class="check"><input type="checkbox" id="opt-compare" checked> 與統一字級的原文對照</label>
+      <label class="check"><input type="checkbox" id="opt-hl"> 用顏色標示小字和大字</label>
+    </fieldset>
+  </aside>
+
+  <section class="preview" aria-label="預覽">
+    <div class="stats" aria-live="polite">
+      <div class="stats-top">
+        <div class="stat"><span class="chip s">小</span><b id="n-s">0</b><small id="p-s">0%</small></div>
+        <div class="stat"><span class="chip m">標準</span><b id="n-m">0</b><small id="p-m">0%</small></div>
+        <div class="stat"><span class="chip l">大</span><b id="n-l">0</b><small id="p-l">0%</small></div>
+        <div class="total" id="n-total">中文字 0 個</div>
+      </div>
+      <div class="bar" aria-hidden="true"><span class="s" id="bar-s"></span><span class="m" id="bar-m"></span><span class="l" id="bar-l"></span></div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="compare" id="compare">
+      <article class="pane uniform">
+        <div class="pane-head"><strong>原文：統一字級</strong><span id="head-uniform">20 px</span></div>
+        <div class="text serif" id="out-uniform"></div>
+      </article>
+      <article class="pane graded">
+        <div class="pane-head"><strong>依筆畫分三級</strong><span id="head-graded">18 / 20 / 22 px</span></div>
+        <div class="text serif graded" id="out-graded"></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>把滑鼠停在右側任何一個字上，可以看到它的筆畫數。</p>
+  <p>筆畫資料來自 Unicode Unihan 資料庫（kTotalStrokes），收錄 20,992 個中日韓統一表意文字（U+4E00–U+9FFF）；不在其中的字、標點、英文和數字一律使用標準字級。正式產品應以教育部標準字體的筆畫數校對，分級界線與字級差距則依研究結果設定。</p>
+</footer>
+
+<script>
+const STROKES = "12222223333334344444555555555566666777881233344445789:1234455891112223333334455556666789:111223333444445666666666778888889999:;;;<===1234678233334444445666878892344666677788999999:<<==@E22333344444444444444444444555555555555555555555555556666666666665666666666666666666666666666666666666666666666666667777777777777776777777777777777877777777777777777777767677778888888888888888888888888888888888888888888888888888888888888888888889999999999989999999999999999999999999999999999999999899999999999::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::::::::::::::::::::::::;;;;;;;;;;;:;;;;;;;;;:;;;;;;;;;;;;;;:;;<;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<;<<<<<<<<<<<<<<<<<<<<<<;<<<<<<<;<<<========<================<==<===>===>=>>>>>>>>>=>>>>>>>>>>>>>>>>>>>>>>>>>>>??>?????????>????>?????????@@@@@@@@@??@@@@AAAA@AAAAAAA@ABBBABACCBDEEEEFEGH234445666666777777788878999::;;;<<=>@D234689244445666678889:9:;==@B24444445555657899::;24455667899:::::::;>?2555566666777777788888999:::::::::::;;;<<<<<=>????@@A2333455566667888;<<>>2455555689<2223344445555566666666666666787777777777777777888888888888888888888999899999999999::::::::::::::::::::::;<;;;;:;;;<;<<;=========>>>>>????????????@@@@ACEEGG2344556566666677777777778788888888888999999899999::::::;;;;;;;;;<<<<<=====>===>>>>>???>?@AAACD234444444455555678889:;;<;;?245;;2555566667778999::;;;=>>>?@ACD244789;;;233344445565466488888899;<E244555577888;233455566777788988999;:==24444555666677778888999999::::;;;;<<<<<;=<>>>=>??@CN2444555667888;;<>?2344444555678888899999::=@B3555555555555555555555555555666666666666666666666666677777777777777777777777777777777677777777777777777777777777777777777788888888888888888889898888888888888888888888888888888878888888888799999999999999999999999999999999999999999999999899999999999999999::::::::::9:::::::::::::::::::::::::::::::::9::::::::::::::::::::::::::::;;;;;;;;;;;:;;;;;;;;;;;;;;;;;;;;;:;;;;;;;;;;;;;;<;;;;;;;;;<;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<=;;;<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<;<<<<<;;<<<<<<<<================<==<===<<======<<====================<=====>>=>>>>>>>><>>>>>>>>>>>>>>>>>>>>>>>>>=?>>>>>>>>=?????@????@????????????????????>???????>????????????@@?@?@@@@?@@@@@@@@@@@@???@@@@@@AAAAAA@@A@AAAAAAAAAAAAABBBBBBBBBABBBBBBBCCCCCCCCCACCDDDDDDDDDDEDDDDEEEEEFEFEFFFFHFGGHGHIIL355555666666677777777777777777788888888899::::::;;;;;<<<<<=====>>>>?@@FJ3445555556666666666666666666777677777777777777777777777777777777778888888888888888888888888888888888888888889999999999999999999999999999999999999999999:::9:::::::::::9::::::::99::::::::::::;;;;;;;;;;;;;9;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<;<<<<<<<<<<<<<<<<<<<<:<<;<<<<<<<=<<<<<<<<<<<===========<==========<<=====<======<====>=>>>>>>>=>>>>?>>>>>>>>>>>>>=>>>>>>>>>>>>>>??>????????????>>??????>??=>??@@@@@@@@@@@@@@@@@@AAAAA@AAAAABACCCBCCCCCDDDDFGHI34567777899:;;<<<=>=?>@345678993789::>BCCE355566688:;;<>>>>?334444455555556666666677777788878889888999999899::::;;;;;<<<<<<===>>?>?@@BFG3555666666666666666666777777777777777777777777777777777778888888888888888888888788888877888888878897899999999999999999999:9999999999999999999999999999::::9:::::::::9::::9::::::::::::::9;:::9::::;;;;;;;;;;::;;;;;;;;;;;;;;;;;;;;;;;;9;;;;;;;;;<;;;;;;;;;;;;;;:;;;;<<<<<;<<<<<<<<<<<<<<<;<;<=<<<<<;<<<<<<<<<<<<<<<<;<<<<<<<<======<========<==<==<=========;=====>>>>>>>>>>=>>>>>>>>>>>=>>>=>>>>???>?>???????????=??????????@@@@@@@@?@@@@@?@@@@AAAAA@@AAAAAAAAA@@AAABCABBCCCDDDDDDDEEDFFFFHG333345666677777888888888999:::;;;<;<=>=>@@AACDDF355556666677777777788888888888888899999:99999::::::::::::::::;:;;;;;;;;;;;<<<<<<<<<<<<=========>>>>>>>>>>???????@AACCCDE35666777899::::;;;<<<>?344555566688999<==>34467678777899<<=<=?AA344556777777888888899999::::::::::;;;;<<<<>>????ABBCEH34634555556666666666667777777667777777777777777888788888888888888888888888888888888888889999999999999999999999999999999999:::9::::::::::::9:::::::::::::;;;;;:;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<<<<<=<<<<<<<<<<<<<<<<<<<=============<===<===<===>>?>>>>>>>>>>>=>>>>>>>>>?>>????????????>???????@@@@@@@@@?@?@@@@@AAAAA@AAABABCCCCDDDDECDFDEFFFFFGFGHG3236676;;?355566799:<>3334789:998:<344455556667777777788888888888899999999999::::::::::;;;;;;;;;;;<;<<<<<<<<<<<=======>>>>=>>>=>>???????>??@@@?@AAAB@CD3566688=3459<3555566677777777777777888888988889999999:::::::::9;;;;;;;;;;;;<<;<<<<<=<===<===>><>=>>=>>>>??>????????@@@@@@BCCDDDEFI368777998:34456777899:>345666<=3444556666777778888888889:999::::;;;;;;<<<<<=====>>>@?>@@AAFG3356889;<==@@BBCI377799::;;;;<=>>?F366677777888888888999999999::::::9:;;;;<;;;;;;<;;;<<<<<<<=====>?>>?>????@@AACDDE435456556777677766667766678878786787778777777777778777777787878877777888888988898888898888988988999889888888889888889998998889:999999999:999::9999::99::99:99999:9:9:9:999:9:999:::::9999999;::::::;::;;:::::;:::::::;:::::::;;:;;;::;:;;;:::;;<<;;<;;<;;;;;;;<;;<;;;;<;;<;<;;<<;;;<;;;;;;;;;<<<<;<;;;<<<;;;;<<<=<<<=<=<<<<<<<==<<<=<=<<<<=<=<<<<<<<=<===<<<=<<<<<;<<>===>=====<>====>=<>===>=>>==<=>===><===>=>>=>>?>?>>??>>=>>>?=??<=>?>??>?>>>>>?>??>>?>??>>????>?>?@?@??>?@????@@?@??>@??@????@???@????????@?@A@@@@@@@?@@@@?A@@@A@A?A@@@?@A@@@BBAB@AA@A@BAAABAAAAAABBBABCBACBBBCCDDDCEDEFGGFGGIIL45556666777788889:;;;;<<=======>>>>>>???@@ABAF44457778888999::::;<<43345555555566666666666666666666667777677777777777778777777777777777777777777777777777777778888888888888888887888888888888888888888898878888888889887888888888899999999::99999999999:99999999:9999999:99999999:::999999999999::9:::::::;::::9::99:::::::::::::::::::::::9:::::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<;;;;;;;<;;;;;;;;;;;;;;<;;;;;;;;;;;;<<;;;;;;;;;;;;<;<<<<<=<<<<<<<<<;<<<<<<<<<<<<<<<<<<<<:<<=<<<=<<<<<=<<<;;<<<<<<<<<<<<<<<===========<=<<=======<========<=====>=<==<===>======>=<=>============>>>>>><=>>>>>=>=>>>>><>>>>>>??>>>>>??>>>>>>>>>>>>>?>?>>?>??>?@????????????>>??????????????>????????>?>????=?????@@>@@@@@@@>@@@A@@@@?@??@@??@A@@?@@@AAAAAABABAABAA@AAAAA@ABBBBBBBBBBACABABBBCCCCCCCCCCCCDDDDDDDCEEEFFFEFGFGFFGGGGHHI469<@446677777889999999:::::::;;;;;;;;;;;;;;;<;<<<<<<<<<<<<<======>>>@?>?????@@@@AAAACDD478::<;;;<<=@BEH47::;;<<=>>?A45888899;;<<=<>?@AABI48889999::::::;;;:;;;;;<<==<=>>@@ABCCBC449;<4556666666677777777788888888888878888888888888888888858999999999999999999999999999999999999:::::::::::::::::::::::;;;;;;;;;:;;;;;;;;<<<<<<<<<<<<<<<=<<<<<<<<<<<==========<<==========>=>>>>>>>>>>>>>????????>??????@@@@?@@@@@??>>@@@@@@@@A?AAAA@AAABBABBCBCBCCDDDDDDEGGGHGI45667789:;::;;<<<<<=>>@E4688889999::::;:;;;;<<<<<=>@@@AD44555555566666666666666666667777777777777777777777777777777777777788888888888888888888888788888888888888888888888888888888888888888888999999999999999:99999999999899999999999999999989999:999999999999999999:99998999999999999999999999999:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::9::9:::::::::::9::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;;:;;;;;;;;;;;;;;;;;;;;:;;;;:;;;;;;;;;;;;;;;;;;;:;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<:<<=<<<<<<<<<<<<<<<<<;<<<<<<<<<<<<<<<<<<<<<<<<<<<<;<<;<<<<<<<<<<<<<<<<<<<=<======================<=<============;<===<===========<======<=<====<=======================>>>>>>><>>>==>>>>>>>>>>>>>>>>>>>>>>>>>=>=>>>>>>>>=>>>>>>>=>>>>>=>=>=>>>>>>>>>>>>>>>>>??>???>???????>??????????????????>>?>>???>????????????????????????>>??@?????????@@@@@@@@>@@@@@@@@@?@@@@@@@@@@@@@@@@@@?@@A@@@@@@??@@?@@@@@@@@@@@@@@@@@@@@@@@@AAAAA@AAA@AAAAAA@AAAAAAA@AA@A?A@AA@AAA@AA@@AABABBBBBBBABBBBBBBBBBBBBBBBBABBBBCCCBCCCBCBCCBCBBACCCCCBCACCCCDDDCDBDDDDCDDCDFDDEEEDEDEEDEEEFFFFEFEEFGGGGHHGIHIIIIJILL46687888999;::::::;;:;;;;<<<<<<<====<====>>>>>???????@@A@@@AAABACF4567888898::<<>===>??@B456788888999999:::9;;;;;;;;<<<<<<<<=>>=>>?????@@@@@AAABCCE4899:;;:;<<<====>>??@@BG44567789>46999:A4778899:::::::::;;;;<<<<<<<<======<>??>?@@@@@AAAACFJ45568456667788899999:::::::;;<<<<<==>43555555665555755565556666666666667666666676666667777777877777677776777777778777777777877777777877797777787777777777777888898888888888888888888888888988888878888888889788888888788888888888:8789998888888899999999999999:99999999:99999:999999999999999999:79999999999999999:9998:999999999999999::::::::::::::::::::::::::::::::::::::::::::::::::::::::99::::::::::::::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<;;;;;;<:<;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<;<<=<<<<;<<<<<<;;<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<;<<<<<<<<<<<<<<<<<<<<<<=<<<<<<<;<<<<<<<<<<<<<<<<<<<<<<<<=============<===<=<===========<=====<===========<==<=========<==>======?========<==>==========>=>>>>>>>>=>>>>>>>>>?>>>>>>>>>>>>>>>?>?=>>>>>>>>>>>>=>>=>>?>=>>>>=>>>>>>>>>=>>>>>?>?>?>=>>>>>>>>>>>???>???????@???@???>??????>?????????>>???????????A??@?????>???????????=????>???@@@@@@@@@@@A@?@@@@@@@?@@@@@@@?@@?@@@@@>@?@?@@@A??@?@@@AA@@AAA@AAAAAAAAAAAA@AAAA@AAAAACAAAB@ABABBBABABB@BBABBBBBBABBBBBBCCCCCCCCCACCABCCCBCCCDCCCCCDDDCDDDDDDDDDDDDDDDEEEDEEEEEEEJEEFFGFEFFFGGGGHHHHGIIJKJKKOP44566666677777777777778888888888888888888888888888889999999999999899999999999999999999999::::::::::8::::::::::::::::::::::::::::::::;;;;;;::;;;;:;;;;;;;;;;;;;;;;;;;;;;:;;;;;;<<<<<<<<<<<<<<<<<<;<<<<<<<<<<<<<<<<<<<<<===============<<===>====<>=====<===============<=======>=>>>>>>>>>>>>>>>>>>=>>>>>>>>>>>>>???????>??>??????>?????????@@@@@@?A@?@>@@@@@@@@@@@@@@@@@@@@@@@@@@@@@A@AAA@AA@AA@AAAAAAAAAA@AABBBBBBBBBBCBBCCBCCCDBCCDDCDDDCDBDEEEFEFEFFGHHIILNQ4488999:<>?A468:=49;>489:=>?A4899<<<=====>>???C4<446667777788888888999999999:::::;;;;;<;<<<<<<<<<<=<====>>>>>>????@@@@ABCCCCCDDEIK43555666667667777777877777777898888888888888888888899999999999999999999::::::::::::9::::;;<;;;;<<;;;:;<;;;;;;;;;;;;;;;<<<<<;<<<<<<=<<<<<<<<=<<====<=<==>>==<===?>>?=>>?=>>???>>??????>?@?@?@@@@@@@AAAAAA@BBACCCDDDDFFFFG59:;;5545566667777777777888888888888888888888899999999:9:999989999999999999999:::::::::::::::::::::::::::::::::;;;;<;:;;;:;;;;;;;;;;;;:;;;;;;;;;<<<<<<<<<<=<<<<<:<<=<<<<<<<<<<<<<<<;<<<<<<==========================<==<====>>>>>=>>>?>>?>><=>>=>=>>>>?????@???>????>>???>?@A@@>@@?A@@@A?@@@@?@@@@ABAAAAA@AAAA@AAABCBBDBBCBBBAACCCCCCCCBDBDDDDDEEFEFEFGH58::;=@CFH5777888898898999::;;;;;<<<<<=====>>>???@?@@@@AAACD589;;==59:;;<<<>5567799<555555677778788888888899999999999999:::::::::::::;;;;;;;;;<<<<<<;<<<<======>>>??@@@AABCCDDF58:<<>>577777888888888899999999999999:::::;::::9:::::::::::::::;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<==================<========>>>>>>>>===>>=>>>>>?????>???>?>?>?>??@@@@@@@@@@@@@@@@?@@@@AA@AAAAAA?AAAABBBBBBBBBABBBBBBCCCCCBDDEEEEEFFEGGHHJLN58999<<566777789999;:::9;;;;<<<<<===?????@@@A?AABBBCDDEF58::;<<=>>>>?@ABD5778999999:::::::::;;;;;;;<<<<===>>>>?@@@AAABBD57888888999999999999999999999999:::::::::::::::::::::::;;:9::::;;;;;;;;;;;;;;;;;;:<;<<<<<<<<<<<<<<<<============================>>=>>>>>>=>=>>>>>>>>>>=>>>?????>??????@@@@@?@@@?@@@@@@A@AAAAAAAAAA@?AAAAAAABBBBBBBBBBCCCBBCCCCCDCDEEDEFHHHIHJ59:<<=I5788999:;;<<=AABD577788888888888999999999999998999999999999:::::::::;::::::9::::::::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;<<<;<<<<<<<<<<<<<;<<<<<<<<<<========;============================>>>>>=>=>>>>>>>>>>>=>>>>>>>>>??????>>????>?>??>???????>??@???@@@?@@@@@@?@@@@@@@@@@AAA@AAAAAAA@AAAAAAAAAAABAABBBBABBBBBBBBBCCCBCBCBCBBCCCDCDDDCDDEEEEEEEEFFFHH5566877677888898888989999999:9:9999:::9;9::;;:;::::;::;;;;;;;;;<<<<<<===<<=<<<=====<=>==========>>?>>>>>>>??A@@?@@A@BABBBEEFGG499;;=57777788888889999999999999::::::::::::::::::::99:::;;;;;;;;;;;;;;<<<<<<<;<<<<<<<<=======================>>>>>>>>>>>>>>?>???????????>??@@@@@A>@@@@@@@@@@AAAAAAAAAAABBBBCBCCCCCBCDDDFFHH5677888899999999::9::::::::;;;;;;;<<<<;<<<==========>=>>>>???????@@@@@@@@@A@AAAABBBDEEF5778899999999:::::::;;;<<<<<<===;>>>>>@AAABDDF68899999999::::9::::::::::::::;;;;;;;;;;;;;;;;;;;;:;;;;;;;;;;;;;;;;;;;<<<<<<<<;<<<<<<<<<<<<<<<<<<<<<<=======<======<======<=>===========>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>???????????>???????=????????@??????????@@@@@@@@@@@@@@@@@@@@?@@@@@@@@@A@@AA@A@AAABAAAAAAAAAAA@AAAAAAA@AAAAAAABBBBBBBBBBBBBBABBBCCBBBBBBCCCBCCCCACCCCCCCDDCCDCDDDDDDDEEEEEDEFFFFFFFGFFFGGGGGFGHHIHIIJJNP6888999999999999:::::::::::::::;;:;;;;;;;;;<<<<<;<<<<<<<<<<========>>>>>>>>>>=>?????????????@@@@@?@@@@@@AAAAAAA@BBBBBBCCCCCDDDFDJFFIJ667788889999999999::::::::::::::::9:::::::::::::;;<<;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<=====<<==<============<=======<=====>>>>>>>>=>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>????????????>???????????????????????>@????????????@@@??@?@@@?@@@@@@?@@@@@@@@@@@@@@@A@@A@AAAAAAAAAA@A@AAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBCBBABBBBCCCCCCCCBCCCCCCBCCDDDCDDDDDCEEEEEDEEEEEEFFGGGGHIIIIKKM35666666666667777777777777777777888888888888888888999999999999999:::::::::;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<;<<<<<<<<<<<============>>>>>>>????@@@@@C689::::;<<<>>@AAABBBCCDEFFG6548788989::::::::;<<<========>>>>>>????@@@?AAABABBCCCFHH687999:9:::;:9::;;;;:;<<<========>?????@@BBBCCCCDEE699:::::::;;;;;;;;;;;;<<<<<<<<<==>>>>>>>?????????@@@@AA@AABBBBBACCDD646:9:9;9:<699999689:::::;;;;;:<==>>>??@@@AABBCEFF67899:::::::::::;;;;;;;;;;;<<<<<<<====>>>>>>><>>>????????@?@AA@AAABBBCDDDDFF64::8=<=>>656666877777777777777777888888888888888888888888888888888999999999999989999<99999999999999999999999;:::::::::::::::::<::::::::::9::::::::::<;;;;;;;;;;;::;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<<<><<<<<<<<<<======<===============<==<===========>>>>=>>=>>>>>>>>@>????>??@??>????????A@@@@@@@@@@@@@@@?@?A@AA?AAAAAAAAAA@@AACABBBBBABCCDBCDDDDEFEIIG688<>AA67::<<<?@69<<<<<>@6899::;<<=>>@@A=6888:;<>>>??@BC6<=>689999:::::::::::::;;;;;;;;;;<<<<=======<==>>>>???????@?@?@AAAABBBCCCCBDCCDEFGH678A6:;<CH6455556665666666777766666676966678777677877878776778888778787787778:78787777777777787778888998898888989987878998888888888988888889888888889998889888898888<898:999899:9:999:99999999999999:999::9:9<9979:9999:999:99999999:9:9:99999999:999:9:::99999999:::;::::::::;::9::::::::::;:::;::;9:::::;:99::::::::;::;:::;:=:::::::::::;;=:;<;<;;:;;<;;;<;;;;;<;;;;;;;;;;;<;;;;;;;;;:;;<;;;;;<;<<;<;;;;;;;;;;;;;;<;;;;;;;;<;<;;<;;;;;;;;;;;;;;;;;;;=<<;<<<=<=<<=<<<;<<;<<<<<<<<<<<<<<<<=<<<<<<<<<<<<<=<<<=<<<<<===<<<<<<<<=<<<<<<<<<<<<<=<<<<<<;=<<<<<<<?<<<<<<===>>===>==>=>===<===>====<======>=========>=<>===<===<;==>=>==>=========<==>@=============?>=>><>>>>>>>??>>=>>=>>?>>><>>>>>>>>>?>>>>>>>>>>=>>>>?>>>?>>>>>>?=>=>=>>?>>>>>?>>>?????@?????@@????>??????>@??????????@??????????@?>??????@@?@?@@@@@@?@@A@@@@@@@>@@@@@@@@@>@?@@A@@@@@?@@@@A@@@@@@@@BBAA@AAAAAABAA@AAAAAAAAA@AAABABBBAAAAEBBABBBBBBBBBABBBCBBBBBBABCBBABBBBCBBCCCCCCCCCCCCCDCCCCCDCCCCCCCCCEDDDDDDDDCDDCCDDDCDDDDEDDDDFEDEEDEFFEFFFFFFHHGJGHGHHJMK6889::::;;;;;;<=<==>=?@@@@AABJ6788888899999999999999999:::::::::::::::::::::::::::::::::::::::;:;;;;;;;;;;:;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<=<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<============================<<<====>>>>>>>>>>>=>>>>>>>>>>>>>>>>>?>>>=>>>>>>>>>>>>=>>>>>?=???????>?????????????????>???>????????????>?????????>@@@?@@@@?@@@@@@@@@@?@@@@@@?@@@@@@@@@@@@AAA@A@AAAA@A@AAAAAAAAAAAAAAAA@AAAAAAAAAA@ABCBBBBBBBAABBBBBBABBBBBBBBBBCBBBBBCCCCCCBBCCCABCBCBBCCCCCCACDDDCDDCDDDDDEECEEEEDEFFFFEFEFFGGGGGGFHHHGHHIJKKK699::;<<<<DH699::;;;;<<<==????@@@@H66888888889:9:899999:99:999:99:9:9:99;::;;:::::::::::::::::;:;:::;::::::;;;::;;<;;;;;;;;;;;;;;<<;;<;<;;=<<<<=<<<<=<<<=<====<==<<<<<>====>=======>>>===>=>=>===<===>>?>>>>>>>>>>?>>>>>>>=>?>>??>?????@>@>??@@?@@????@@@@AAAA@@@A@@A?AAAAAAAAAA@A@A@AABBBABBBCBBBBCCCCCDDCDDDDEEEFFFGFFHHGHGI6669:<<=BCCGI79::;;;;;;<;<<<<==>>>>>????@@@@@AAAAABBBBCCCBCDDDEEFFI467888999:;<<=>??799;;;;:<<=<<=========>>>>?????@AABBCDDCEFEFGI779999999::::::::::::::::::;;;;;;;;;;;;;;;;;;;;:;;;;<<<<<<<<<<==<<<<<<<<<<<<<<;<<<<<<<<<<<<<<<<<<==========================================>>>>>>>>>==>>>>>>>>>>=>>>>>>>>>>>>>>??????????????????????????????=??????????????@@@@@@@?@@@@@?@@@@@@@@@@@@@@@@@@@@?@@@@@AAAAA@@AAA@@AAAA@AAAAAAAAAAAAAABBBBABABBBBBBABBBBBBAABBBBCBCBACBCECBCCCCCDCCCCCCCCCCCCCCCDDDDDCDDDCDDDCDDDDDDDDEDEEEEEEEEDFFFEEFFFFGGFGGGGGGGHHHGHHIIHJIKJKM244444555555555555666666666666666777777777777777777888888888888888888888889999999999999::::::::::::::::::::;;;;;;;;;;;;;;;;;;;;<<<<<<<<<=====>>>>>>???C7:;;;=>?AAABBFG7::;==???ABDIKL78:;;;;;;<<<<=====>>>>?@@@AA@AABBCC7:::;;<<<<<<=======>>>??@@@?AAABABCHK7999::::;;;;;;;;;;<<<=<<<;<<<<<<<<<<<=============>>>>>>>>>>?????????????????????@@@@@@@@AAAAAAAABBBBBBBBCCCCCCCDCDEEEEEFFFFGGHH4666778888888888888999999999999:::::::::::;;;;<<<<<<<<<<<==>>>>?@@@@AAE7;;;===>@?@A769999:::;;;;;;;;<<<<<<<<<<<=========>>>>>>??????????@@@ABBCCCDEEGJ79::::;;;;;;:;;;;;<<<<<<<<<<<=<<<<<<<<<<<<<<======================<======>>>>>>>>>>>>>>>>>>>??????????????????????????????=??@@@@@@@?@@??@@@@@@@?@@@AA@AAAAAAAAAABABBBBBBBBBBBBBBBABBCBCCCCCCCCCCCCCCCCCCCCCCBDCDDDDBDCEEEEEEFEFFFFFFGGFGGHHHGIIIHIJJLKJ7:;;;<===>>???????@@BBBCCCCDEHK7899::::::::;;;;;;;;;;;;;;<<<<<<<<<=<<<<<<<<<<<<<<<<===============>>>>>>>>>???????????????????????@@@@@@@@@@@@@@@@AAAAAAAAABBBBBABCCCCCCCCCDDDDDEEDEEFFFGGJ4567778888899999999999::::::::;;;<<<<<<<<======>>>?@@7<<===>>>?@@@@@@ABCDE7:=?C74456555576676667677677778878777777887777878888898888988988988899::99999:99:::::::9::9:::::;::::::::;;::::;;:;;::::;;;;;;<;;;<;;<;;<<;;=;=<===<=<<=<<<=<<=<<<<===<<==<=>==>===>==>>=?>?>>>>>>?=????????@@@@@?@A@@?AAABBBCEFF7455:555555556666776676667;67777777777677778888898888888888=89889=88899899999:99999:999:::::;:::8::::?::;@;;<;;:;;;;;;;;=;;<<<<<<<<<=<<==<===========>?B>>>>?>>>>>??????@@AAAAABCBCCDDEE799:::::::;;;;;;;;;;;;<<<<<<<<===========>>>>>>>>>>>>>>?????????????@@?@@@@@@@@A@@@@@AAAAAAABBBABBBBCCCCCDDDDDDDEEEGHHHHJHJJJ78;<<D79;<B8899::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<;<<<<<<<<<<<<<<<<<<<<<<<<<<>=================================================================<=====>>>>>>>>>>>>>>>>>>>>>>>>>>=>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>???????????????>?????????>>??????????????????????>?????>????>????????@@@@@@@@@@@@@@@@@@@@@@@@@@@??@@@@@@>@@@@@@@@@@@@@@@@@@@@@@@@@@?@@@@?@@@@@@@@@@@@A@AA@AAAAAAAAAAAAAAAAAAAAAAA@AAAAA@AAAAAAAAAAA@AAAA@AAAAAA@AAAAAAABBBBBBBBBBBBBBBBBABBABBBABBBBBBBBABBBB@BBBBBBBBBAABBBABCCCCCBCCBCBCBCBCCCCCCCCCCCCCCCCCBCCCCCCCCCCCCCCCCCCDEBDDDDDDDEDDDDDDCCCDDDCDCDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEDEDECEEEEEEEDECEEDDEEEEFFFFFFFEEFFFFFFFFEFGFGGGGFGEGGGGGGGGGFHHHHHIHIIIIIJIIJJJJKKKKLLLLML5667777788888888888999999999999999999999999:::::::::::::::::::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<============================>=>>>>>>>>>>>>>>>>>>????????????????@@@@@@@@@@@AAAAAAAAAAABBBBBBCDDFF87:;<?CE4899:::;;;;;<<<<<<<<<<<<<=========>>>>>>>>>>??>>?>????@@@@@@@@@@@A@@AAAAAAAAAA@AABBBBBBBBBCCCCCCDDDEEEDEF345666667777777788999999999::::;;;;;;;;;;<<<<<====>@83555555566666666666667676677777778877778777878989889888889999:9999:9999:99999::::::;:::::;::::;:<;;;;<;;;<;;;<<;;;;;<<<<<<;<<=>==<===>>?>?>>>@>@@@@@@@ABC8@A8:::::;;<<<<<<<<===>===>>>?@@ABABBBBBBBBCBCEHHL8;;;<;<<<<<<===========>>>????>????@@@@@@@@@@@@@A@AAAAAAAABBBBCBCBCCCCDDDDECDDEEEEEEFFFEEGHHHHGHHIJKKKKMW88<<==>>>?@@B8<?C98>?@EG9;<<<<<<<======<=>>>>>>>>>>>>>????????????@@@@?@@AAAAAAAABBBBBBBBBBABBBBCCBCCCCCCDDEECEFFFEFGHHGIM9<>>???@AAABBBBBCCCBCCCEFGH479<==>9<?@AC9==>>@BACCDDDF9;;;<<<<===========>>>>>>>?????????@@???????@@@@@?@@@@@@@@@@@BBAAAAAAAAAAABBBBBBBBBBBCCCCCCCBCDDDDDEEEEEFFFGFGGHIIKJ6889999:::::::::;;;;<<<<<<<=======>??????@@@@BBCDEG9<<==>>>>>??@@AABBBCBCBCCDDDDEEEEEEFJK47999<==>>?@@9EK399;:::;;<<<<<=<==<=<=====>=?======>>>>>>>?>??>?>>@?????????@@@?@@@@@@@A@@@@AAAABAAAAA@AAAABBBBABABBABCCBCBCDDDDDDDDDDFFEDEDEEGHIIKKN35566777777788888899999999::::::;;;;<<<<<=====>>??I9;A9=>>>@@@AAABBCBDEGK:<<=======>>>>=>>>>>>>>>>>>>???????>?????????????????@@@@@@@@@@@@@@@@@@@AAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBCCCCCCCCCBCCCCCCCCCBCCCDDCDDDDCDDDDCDEEEEEEEDDEEEEDEFEDFGFFFFFFFFFGGGGGGGHHHJJJJKJKKLKMN356667777888888888888999999999::::::;;;;;;;<<<<<====>>>?ACDD:;<<<<<===>>?>>>?????@@?AABBBBCCCCBCCDDDEFEEFGGI:;>?BFG:<==>>>>>>>>??@???????@@@@@@@AAAAAAABBBB@BCCCCCCCDDDDDDEEEFFFFFGGGHHIK:>?@BDEIHK:KM:@ABBCDEEF:<====>>?>>?@@AAAAABCCDCDEDGGG;====>>>>??>????????????????????@@@@@@@@@@@@A@@@@@@@@@@@@@?@@@@AAAAAAAAAA@AAAAAAAAAAAAAAAAABBBBBABBBBBBBBBBABBBBBBBBABBBBBCCCBCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDDDDCDDBDDDDDDDDDDDDDDDDCDDDDDDDDDDCDDEEEEDEEEEEDEEEEEEEEEDEEFFFFEFFFFFFFFDEFEFFFFFFGFFGGGHFGGGGGGGGGGFGHHHHHHHHHHIHGHIIHHHIJJIJIKKLNQ8:;<<<<<=============>>>>>>>>>>>>>>>?????????????@@@@@@@@@@@@@@@AAAAAAAAAAAAAAAABBBBBBBCCCCCCCCCDDDDEEEEF;<=====9====>>>>>>???????????????????@????@@@@@?@@@@@@@A@@@@@@@@@@@@@@@@AAAA@AAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBB@BBBBBBBBBBCBBBBCACCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDCDDDDDDDDCDDDDDDDDDDCDDDDEEEEEEEEEEEEEEEDEEEDDEEEEEEEEEEEEEEEFFFFEFFFFFFFFEFFFGGGGGGGEFGHFGGGGGGGGFGGGHHGGHHHHHHHHHHHHHHIHIIHIIHJJKKKLLLLMNN57788899999:::::::::::::;;;;;;;;;<<<<<<<<<============>>>>>>>>????????@@@@AAAABBBBBBFF;?@CDDEHH@;===??@@@@AAABBBBBCCCCCCCDDDDEEFGHILNQ;7>????@@@AABBCCDEM;?@;>>?ACDG<;??@@@AAH<?AF<;?@@@@@?AAAAABBBCCDDDDDDDEEEEEFFGGGIJKL<@AC=8ABBBCCEGGHIJ<=D=>>>?==BBCFEEEFIHI=8AAABBBBBBBBCCDDEFFFFGGGGL>@@AABCFGGHHIKT>ABCEG6??@ABCCCDDDEDDDDDADEEEEEEFFFGGGGGHHHHHHIHIILLS8:;<====>>??AA@BCCDEFFFPQ`5;;@FL7AEFIJJ?@:A9<@EK=45B@2444568CA?=;E=B<:A8877;A<9;<E79<?<79<=@HFKD<EQ>?BFGIKMA@::=@?8>F=??ACC<BB=<>";
+const SAMPLE = "閱讀的時候，眼睛並不是一個字一個字地看，而是在一行文字之間跳動、停留，再把看到的形狀組合成意義。筆畫少的字，例如「一」、「人」、「口」、「大」，輪廓簡單，就算印得小一點也能一眼認出；筆畫多的字，例如「鬱」、「靈」、「議」、「職」、「體」，結構細密，在同樣大小的方格裡線條擠在一起，就容易看錯，或讀得很吃力。\n\n如果依照每個字的筆畫數調整大小，讓簡單的字略小、複雜的字略大，整段文字的視覺密度就會比較平均。讀者長時間閱讀報紙、藥品說明書或電子書時，眼睛或許能少一點疲勞，多一點專注。對年長者和視力較弱的讀者來說，這樣的差別可能更加明顯。\n\n這個原型使用 Unicode 的筆畫資料，可以即時調整分級界線、標準字級和每一級的差距，方便比較不同設定下的閱讀效果。";
+
+const $ = (id) => document.getElementById(id);
+const src = $("src");
+
+function strokesOf(ch) {
+  const cp = ch.codePointAt(0);
+  if (cp >= 0x4E00 && cp <= 0x9FFF) {
+    const n = STROKES.charCodeAt(cp - 0x4E00) - 48;
+    return n > 0 ? n : 0;
+  }
+  return 0;
+}
+
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ESC[c]);
+
+function settings() {
+  return {
+    smallMax: +$("small-max").value,
+    largeMin: +$("large-min").value,
+    base: +$("base").value,
+    step: +$("step").value,
+    lh: +$("lh").value,
+    font: document.querySelector('input[name="font"]:checked').value,
+    dir: document.querySelector('input[name="dir"]:checked').value,
+    align: document.querySelector('input[name="align"]:checked').value,
+    compare: $("opt-compare").checked,
+    hl: $("opt-hl").checked,
+  };
+}
+
+function renderText() {
+  const st = settings();
+  const paras = src.value.split(/\n/).map((p) => p.trim()).filter(Boolean);
+  let uni = "", gr = "", ns = 0, nm = 0, nl = 0;
+  for (const p of paras) {
+    uni += "<p>" + esc(p) + "</p>";
+    let line = "";
+    for (const ch of p) {
+      const n = strokesOf(ch);
+      if (!n) { line += esc(ch); continue; }
+      let cls;
+      if (n <= st.smallMax) { cls = "s"; ns++; }
+      else if (n >= st.largeMin) { cls = "l"; nl++; }
+      else { cls = "m"; nm++; }
+      line += '<span class="' + cls + '" title="' + n + ' 畫">' + ch + "</span>";
+    }
+    gr += "<p>" + line + "</p>";
+  }
+  $("out-uniform").innerHTML = uni || '<p class="hint">在左側貼上文章即可預覽。</p>';
+  $("out-graded").innerHTML = gr || '<p class="hint">在左側貼上文章即可預覽。</p>';
+
+  const total = ns + nm + nl;
+  const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+  $("n-s").textContent = ns; $("n-m").textContent = nm; $("n-l").textContent = nl;
+  $("p-s").textContent = pct(ns) + "%"; $("p-m").textContent = pct(nm) + "%"; $("p-l").textContent = pct(nl) + "%";
+  $("n-total").textContent = "中文字 " + total + " 個";
+  $("bar-s").style.width = (total ? (ns / total) * 100 : 0) + "%";
+  $("bar-m").style.width = (total ? (nm / total) * 100 : 0) + "%";
+  $("bar-l").style.width = (total ? (nl / total) * 100 : 0) + "%";
+}
+
+function applyStyle() {
+  const st = settings();
+  const fsS = Math.max(8, st.base - st.step), fsM = st.base, fsL = st.base + st.step;
+  const lhPx = Math.round(fsL * st.lh) + "px";
+  for (const el of [$("out-uniform"), $("out-graded")]) {
+    el.style.setProperty("--fs-s", fsS + "px");
+    el.style.setProperty("--fs-m", fsM + "px");
+    el.style.setProperty("--fs-l", fsL + "px");
+    el.style.setProperty("--lh-px", lhPx);
+    el.classList.toggle("serif", st.font === "serif");
+    el.classList.toggle("vertical", st.dir === "v");
+  }
+  $("out-graded").classList.toggle("mid", st.align === "mid");
+  $("out-graded").classList.toggle("hl", st.hl);
+  const cmp = $("compare");
+  cmp.classList.toggle("single", !st.compare);
+  cmp.classList.toggle("stack", st.dir === "v");
+
+  $("small-max-out").textContent = st.smallMax + " 畫";
+  $("large-min-out").textContent = st.largeMin + " 畫";
+  $("base-out").textContent = st.base + " px";
+  $("step-out").textContent = st.step + " px";
+  $("lh-out").textContent = st.lh.toFixed(1) + " 倍";
+  const midLo = st.smallMax + 1, midHi = st.largeMin - 1;
+  $("rule-hint").textContent = midLo <= midHi
+    ? midLo + (midLo === midHi ? "" : "–" + midHi) + " 畫的字使用標準字級。"
+    : "目前沒有字會使用標準字級。";
+  $("head-uniform").textContent = fsM + " px";
+  $("head-graded").textContent = fsS + " / " + fsM + " / " + fsL + " px";
+  const POOL = "一人口大小山文字心的看書時間國這語說閱讀龍鬱靈議職體";
+  const pick = (test) => { const out = [...POOL].filter((c) => test(strokesOf(c))).slice(0, 4).join(""); return out ? "，如 <em>" + out + "</em>" : ""; };
+  $("legend").innerHTML =
+    "<span>小 " + fsS + " px：≤ " + st.smallMax + " 畫" + pick((n) => n <= st.smallMax) + "</span>" +
+    "<span>標準 " + fsM + " px：" + (midLo <= midHi ? midLo + "–" + midHi + " 畫" : "無") + pick((n) => n > st.smallMax && n < st.largeMin) + "</span>" +
+    "<span>大 " + fsL + " px：≥ " + st.largeMin + " 畫" + pick((n) => n >= st.largeMin) + "</span>";
+}
+
+$("small-max").addEventListener("input", () => {
+  const s = $("small-max"), l = $("large-min");
+  if (+s.value >= +l.value) l.value = Math.min(+l.max, +s.value + 1);
+  if (+s.value >= +l.value) s.value = +l.value - 1;
+  applyStyle(); renderText();
+});
+$("large-min").addEventListener("input", () => {
+  const s = $("small-max"), l = $("large-min");
+  if (+l.value <= +s.value) s.value = Math.max(+s.min, +l.value - 1);
+  if (+l.value <= +s.value) l.value = +s.value + 1;
+  applyStyle(); renderText();
+});
+for (const id of ["base", "step", "lh", "opt-compare", "opt-hl"]) $(id).addEventListener("input", applyStyle);
+for (const r of document.querySelectorAll('input[type="radio"]')) r.addEventListener("change", applyStyle);
+
+let timer;
+src.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(renderText, 120); });
+$("btn-sample").addEventListener("click", () => { src.value = SAMPLE; renderText(); });
+$("btn-clear").addEventListener("click", () => { src.value = ""; renderText(); src.focus(); });
+
+src.value = SAMPLE;
+applyStyle();
+renderText();
+</script>
+</body>
+</html>
