@@ -115,6 +115,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .text.serif { font-family: var(--font-serif); }
 .text p { margin: 0 0 0.9em; text-indent: 2em; }
 .text p:last-child { margin-bottom: 0; }
+.text p.title { text-indent: 0; font-weight: 600; margin-bottom: 1.2em; }
 .text.vertical { writing-mode: vertical-rl; height: 30rem; overflow-x: auto; overflow-y: hidden; }
 .text.vertical p { margin: 0 0 0 0.9em; }
 
@@ -286,8 +287,11 @@ function renderText() {
   const st = settings();
   const paras = src.value.split(/\n/).map((p) => p.trim()).filter(Boolean);
   let uni = "", gr = "", ns = 0, nm = 0, nl = 0;
-  for (const p of paras) {
-    uni += "<p>" + esc(p) + "</p>";
+  // A short first line with no closing punctuation is shown as the title.
+  const hasTitle = paras.length > 1 && paras[0].length <= 40 && !/[。！？…」』.!?]$/.test(paras[0]);
+  paras.forEach((p, i) => {
+    const open = hasTitle && i === 0 ? '<p class="title">' : "<p>";
+    uni += open + esc(p) + "</p>";
     let line = "";
     for (const ch of p) {
       const n = strokesOf(ch);
@@ -298,8 +302,8 @@ function renderText() {
       else { cls = "m"; nm++; }
       line += '<span class="' + cls + '" title="' + n + ' 畫">' + ch + "</span>";
     }
-    gr += "<p>" + line + "</p>";
-  }
+    gr += open + line + "</p>";
+  });
   $("out-uniform").innerHTML = uni || '<p class="hint">在左側貼上文章即可預覽。</p>';
   $("out-graded").innerHTML = gr || '<p class="hint">在左側貼上文章即可預覽。</p>';
 
